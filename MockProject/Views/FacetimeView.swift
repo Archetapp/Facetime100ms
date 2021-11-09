@@ -15,15 +15,34 @@ struct FacetimeView: View {
 	@State var friendTrack = HMSVideoTrack()
 	let tokenProvider = TokenProvider()
 	@StateObject var viewModel: ViewModel
+	@Environment(\.presentationMode) var presentationMode
+	
+	@State var isMuted: Bool = false
+	@State var videoIsShowing: Bool = true
 	
 	
 	
 	var body: some View {
 		ZStack(alignment: .bottomTrailing) {
 			VideoView(track: friendTrack)
-			VideoView(track: localTrack)
+				.edgesIgnoringSafeArea(.all)
+			if !videoIsShowing {
+				ZStack {
+					Color.gray
+					Image(systemName: "video.slash.fill")
+				}
 				.frame(width: 150, height: 250, alignment: .center)
 				.padding()
+			} else {
+				VideoView(track: localTrack)
+					.frame(width: 150, height: 250, alignment: .center)
+					.cornerRadius(10)
+					.shadow(radius: 20)
+					.padding(.bottom, 80)
+					.padding()
+			}
+			videoOptions
+				.padding(.bottom, 10)
 		}
 		.onAppear(perform: {
 			joinRoom()
@@ -34,15 +53,80 @@ struct FacetimeView: View {
 		})
 	}
 	
+	var videoOptions: some View {
+		HStack(spacing: 20) {
+			Spacer()
+			Button {
+				stopCamera()
+			} label: {
+				Image(systemName: videoIsShowing ? "video.fill" : "video.slash.fill")
+					.frame(width: 60, height: 60, alignment: .center)
+					.background(Color.white)
+					.foregroundColor(Color.black)
+					.clipShape(Circle())
+			}
+			
+			Button {
+				endRoom()
+			} label: {
+				Image(systemName: "phone.down.fill")
+					.frame(width: 60, height: 60, alignment: .center)
+					.background(Color.red)
+					.foregroundColor(Color.white)
+					.clipShape(Circle())
+			}
+			
+			Button {
+				muteMic()
+			} label: {
+				Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
+					.frame(width: 60, height: 60, alignment: .center)
+					.background(Color.white)
+					.foregroundColor(Color.black)
+					.clipShape(Circle())
+			}
+			Spacer()
+		}
+	}
+	
+	func switchCamera() {
+		self.hmsSDK.localPeer?.localVideoTrack()?.switchCamera()
+	}
+	
+	func muteMic() {
+		if isMuted {
+			self.hmsSDK.localPeer?.localAudioTrack()?.setMute(true)
+		} else {
+			self.hmsSDK.localPeer?.localAudioTrack()?.setMute(false)
+		}
+		isMuted.toggle()
+	}
+	
+	func stopCamera() {
+		if self.videoIsShowing {
+			self.hmsSDK.localPeer?.localVideoTrack()?.stopCapturing()
+			self.videoIsShowing = false
+		} else {
+			self.hmsSDK.localPeer?.localVideoTrack()?.startCapturing()
+			self.videoIsShowing = true
+		}
+	}
+	
 	func endRoom() {
-		self.viewModel
+		hmsSDK.endRoom(lock: false, reason: "Meeting has ended") { didEnd, error in
+			if didEnd {
+				self.presentationMode.wrappedValue.dismiss()
+			} else {
+				
+			}
+		}
 	}
 	
 	func listen() {
 		self.viewModel.addVideoView = {
 			track in
-			hmsSDK.localPeer?.localAudioTrack()?.setMute(true)
-			hmsSDK.localPeer?.localVideoTrack()?.stopCapturing()
+			hmsSDK.localPeer?.localAudioTrack()?.setMute(false)
+			hmsSDK.localPeer?.localVideoTrack()?.startCapturing()
 			self.localTrack = hmsSDK.localPeer?.localVideoTrack() as! HMSVideoTrack
 			self.friendTrack = track
 		}
